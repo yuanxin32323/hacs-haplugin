@@ -1,0 +1,12 @@
+{
+  "domain": "haplugin",
+  "name": "Haplugin",
+  "codeowners": ["@bai"],
+  "config_flow": true,
+  "dependencies": ["mqtt"],
+  "documentation": "https://smarthome.haplugin.com/",
+  "integration_type": "device",
+  "iot_class": "cloud_push",
+  "requirements": ["paho-mqtt"],
+  "version": "0.1.1"
+}

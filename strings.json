@@ -1,0 +1,78 @@
+{
+  "config": {
+    "step": {
+      "mqtt_url": {
+        "title": "连接配置",
+        "description": "请输入从网站获取的Token",
+        "data": {
+          "mqtt_url": "Token"
+        }
+      },
+      "entity_types": {
+        "title": "选择设备类型",
+        "description": "选择您想要同步到小度的设备类型",
+        "data": {
+          "entity_types": "设备类型"
+        }
+      },
+      "select_entities": {
+        "title": "选择{type_name} {progress}",
+        "description": "选择要同步的设备，共 {count} 个设备可选",
+        "data": {
+          "entities": "设备列表"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "连接失败，请检查您的MQTT连接信息",
+      "invalid_mqtt_url": "无效的连接信息格式",
+      "no_entity_types_selected": "请至少选择一种实体类型",
+      "no_entities_selected": "请至少选择一个实体",
+      "Value should be a list": "请至少选择一个选项",
+      "invalid_user_token": "无效的用户Token，请检查输入"
+    },
+    "abort": {
+      "already_configured": "设备已经配置",
+      "single_config_only": "此集成只支持添加一个配置项，请编辑现有配置或删除后重试"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "设置选项",
+        "description": "请选择要修改的内容",
+        "data": {
+          "action": "操作"
+        }
+      },
+      "modify_token": {
+        "title": "修改Token",
+        "description": "请输入新的Token\n修改后将保留当前的设备选择",
+        "data": {
+          "mqtt_url": "新Token"
+        }
+      },
+      "entity_types": {
+        "title": "修改设备类型",
+        "description": "选择您想要同步到小度的设备类型",
+        "data": {
+          "entity_types": "设备类型"
+        }
+      },
+      "select_entities": {
+        "title": "选择{type_name} {progress}",
+        "description": "选择要同步的设备，共 {count} 个设备可选",
+        "data": {
+          "entities": "设备列表"
+        }
+      }
+    },
+    "error": {
+      "no_entity_types_selected": "请至少选择一种实体类型",
+      "no_entities_selected": "请至少选择一个实体",
+      "Value should be a list": "请至少选择一个选项",
+      "invalid_mqtt_url": "无效的连接信息格式",
+      "invalid_user_token": "无效的Token，请检查输入"
+    }
+  }
+}

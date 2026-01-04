@@ -49,7 +49,11 @@ class MqttSyncFlowMixin:
             else:
                 self._entity_types = entity_types
                 self._current_type_index = 0
-                self._selected_entities = {}
+                # 保留那些仍在新选择的实体类型中的已选实体（用于编辑模式）
+                self._selected_entities = {
+                    k: v for k, v in self._selected_entities.items() 
+                    if k in entity_types
+                }
                 # 进入第一个类型的实体选择
                 return await self._async_step_select_type_entities()
 

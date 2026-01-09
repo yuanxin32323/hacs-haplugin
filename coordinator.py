@@ -19,6 +19,27 @@ from .const import *
 
 _LOGGER = logging.getLogger(__name__)
 
+def _serialize_for_json(obj):
+    """将对象转换为 JSON 可序列化的格式，处理 datetime 等特殊类型。"""
+    if isinstance(obj, dict):
+        return {k: _serialize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_serialize_for_json(item) for item in obj]
+    elif isinstance(obj, datetime.datetime):
+        return obj.isoformat()
+    elif isinstance(obj, datetime.date):
+        return obj.isoformat()
+    elif isinstance(obj, datetime.time):
+        return obj.isoformat()
+    elif hasattr(obj, '__dict__'):
+        # 尝试转换自定义对象
+        try:
+            return str(obj)
+        except Exception:
+            return None
+    else:
+        return obj
+
 class MqttSyncCoordinator(DataUpdateCoordinator):
     """Haplugin协调器，管理MQTT连接和实体状态。"""
 
@@ -67,6 +88,13 @@ class MqttSyncCoordinator(DataUpdateCoordinator):
         self._processing = False
         self._messages_processed = 0
         self._messages_failed = 0
+        
+        # MQTT推送防抖相关
+        self._startup_grace_period = 30  # 启动后30秒内不推送MQTT
+        self._startup_time = None  # 启动时间
+        self._pending_mqtt_publishes = {}  # 待推送的实体状态 {entity_id: state_data}
+        self._debounce_timers = {}  # 防抖定时器 {entity_id: task}
+        self._mqtt_debounce_delay = 0.5  # 防抖延迟(秒)
     
     async def _async_update_data(self):
         """获取最新数据。"""
@@ -344,37 +372,110 @@ class MqttSyncCoordinator(DataUpdateCoordinator):
             _LOGGER.error("处理MQTT消息时出错: %s", str(e))
     
     async def _add_to_queue(self, state: State):
-        """添加消息到队列中。"""
+        """接收状态变化，使用防抖后同时推送到云端和小程序。"""
         try:
+            if isinstance(state, State):
+                # 序列化状态数据
+                state_data = _serialize_for_json(state.as_dict())
+                entity_id = state_data.get('entity_id', 'unknown')
+                
+                # 存储最新状态（用于防抖后推送）
+                self._pending_mqtt_publishes[entity_id] = state_data
+                
+                # 取消该实体的旧定时器（如果存在）
+                if entity_id in self._debounce_timers:
+                    old_timer = self._debounce_timers[entity_id]
+                    if not old_timer.done():
+                        old_timer.cancel()
+                
+                # 启动新的防抖定时器
+                self._debounce_timers[entity_id] = self.hass.async_create_task(
+                    self._debounced_state_publish(entity_id)
+                )
+                _LOGGER.debug("防抖：为 %s 设置 %.1f 秒延迟推送", entity_id, self._mqtt_debounce_delay)
+            
+        except Exception as e:
+            _LOGGER.error("设置状态防抖推送时出错: %s", str(e))
+    
+    async def _debounced_state_publish(self, entity_id: str):
+        """防抖延迟后同时执行POST和MQTT推送。"""
+        try:
+            # 等待防抖延迟
+            await asyncio.sleep(self._mqtt_debounce_delay)
+            
+            # 检查是否在启动缓冲期内
+            if self._startup_time:
+                import time
+                elapsed = time.time() - self._startup_time
+                if elapsed < self._startup_grace_period:
+                    _LOGGER.debug("启动缓冲期内，跳过推送 (已过 %.1f 秒)", elapsed)
+                    # 清理待推送状态
+                    self._pending_mqtt_publishes.pop(entity_id, None)
+                    self._debounce_timers.pop(entity_id, None)
+                    return
+            
+            # 获取最新的待推送状态
+            state_data = self._pending_mqtt_publishes.pop(entity_id, None)
+            if not state_data:
+                return
+            
+            # 清理定时器引用
+            self._debounce_timers.pop(entity_id, None)
+            
+            # 1. POST 到云端
+            post_device_data = {
+                'type': 'state_changed',
+                'data': state_data,
+                'openid': self.username,
+                'secret': self.password
+            }
+            
             # 如果队列已满，则移除最旧的消息
             if self._message_queue.full():
                 try:
-                    # 非阻塞获取，避免死锁
                     self._message_queue.get_nowait()
                     _LOGGER.warning("队列已满，丢弃最旧的消息")
                 except asyncio.QueueEmpty:
                     pass
-
-            if isinstance(state, State):
-                post_device_data = {
-                    'type': 'state_changed',
-                    'data': state.as_dict(),
-                    'openid': self.username,
-                    'secret': self.password
-                }
-                await self._message_queue.put(post_device_data)     
-                _LOGGER.debug("消息已加入队列，当前队列长度: %s", self._message_queue.qsize())
+            
+            await self._message_queue.put(post_device_data)
+            _LOGGER.debug("防抖后加入HTTP队列: %s", entity_id)
             
             # 确保队列处理器在运行
             if not self._processing:
                 self._start_queue_processor()
             
+            # 2. MQTT 推送到小程序
+            if self._mqtt_client and self._connected:
+                mqtt_message = {
+                    'type': 'state_changed',
+                    'data': state_data
+                }
+                
+                topic = f"{MQTT_REPORT_TOPIC}/{self.username}"
+                
+                await self.hass.async_add_executor_job(
+                    self._mqtt_client.publish,
+                    topic,
+                    json.dumps(mqtt_message),
+                    0,  # QoS
+                    False  # retain
+                )
+                _LOGGER.debug("防抖后MQTT推送完成: %s", entity_id)
+            
+        except asyncio.CancelledError:
+            _LOGGER.debug("防抖定时器被取消: %s", entity_id)
         except Exception as e:
-            _LOGGER.error("添加消息到队列时出错: %s", str(e))
+            _LOGGER.error("防抖推送时出错: %s", str(e))
     
     async def _handle_connection_success(self):
         """处理连接成功。"""
         _LOGGER.info("MQTT连接成功处理")
+        
+        # 记录启动时间，开始缓冲期
+        import time
+        self._startup_time = time.time()
+        _LOGGER.info("开始 %s 秒的启动缓冲期，期间不推送MQTT消息", self._startup_grace_period)
         
         # 更新连接状态
         self._connected = True
@@ -564,7 +665,8 @@ class MqttSyncCoordinator(DataUpdateCoordinator):
             for entity in entities:
                 state: State = self.hass.states.get(entity)
                 if isinstance(state, State):
-                    entity_dic = dict(state.as_dict())
+                    # 使用序列化函数处理 datetime 等特殊类型
+                    entity_dic = _serialize_for_json(state.as_dict())
                     entity_list.append(entity_dic)
             _LOGGER.debug(f'同步设备实体列表:{entity_list}')
             post_device_data = {

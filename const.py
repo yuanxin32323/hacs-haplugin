@@ -10,6 +10,7 @@ CONF_ENTITIES = "entities"
 # MQTT配置
 MQTT_RECONNECT_INTERVAL = 5  # 断线后重连间隔，单位：秒
 MQTT_COMMAND_TOPIC = "ha2xiaodu/command"  # 订阅的命令主题
+MQTT_REPORT_TOPIC = "ha2xiaodu/report"  # 上报状态的主题
 
 # 传感器
 ATTR_ENTITIES_COUNT = "entities_count"  # 实体数量属性
@@ -33,6 +34,10 @@ MAX_QUEUE_SIZE = 3000
 
 # 受支持的实体类型
 SUPPORTED_ENTITY_TYPES = [
+    {
+        "value": "automation",
+        "name": "自动化(automation)"
+    },
     {
         "value": "button",
         "name": "按钮(button)"
@@ -60,6 +65,10 @@ SUPPORTED_ENTITY_TYPES = [
     {
         "value": "scene",
         "name": "场景(scene)"
+    },
+    {
+        "value": "script",
+        "name": "脚本(script)"
     },
     {
         "value": "switch",

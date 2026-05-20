@@ -1,7 +1,7 @@
 # Haplugin - 小度语音控制 Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![version](https://img.shields.io/badge/version-0.1.1-blue.svg)](https://github.com/yuanxin32323/haplugin/releases)
+[![version](https://img.shields.io/badge/version-0.1.4-blue.svg)](https://github.com/yuanxin32323/hacs-haplugin/releases)
 
 通过小度智能音箱语音控制 Home Assistant 设备的集成插件。
 
@@ -32,7 +32,7 @@
 
 1. 确保已安装 [HACS](https://hacs.xyz/)
 2. 在 HACS 中点击右上角 **⋮** → **自定义存储库**
-3. 添加存储库地址：`https://github.com/yuanxin32323/haplugin`
+3. 添加存储库地址：`https://github.com/yuanxin32323/hacs-haplugin`
 4. 类别选择：**Integration**
 5. 点击 **添加** → 搜索 **Haplugin** → 点击 **下载**
 6. 重启 Home Assistant
@@ -113,4 +113,4 @@ MIT License
 ## 🔗 相关链接
 
 - [官方网站](https://smarthome.haplugin.com)
-- [问题反馈](https://github.com/yuanxin32323/haplugin/issues)
+- [问题反馈](https://github.com/yuanxin32323/hacs-haplugin/issues)

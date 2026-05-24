@@ -120,9 +120,13 @@ def _migrate_legacy_registry_entries(
             for item in entity_registry.entities.values()
             if item.platform == DOMAIN
             and item.domain == platform
+            and _registry_entry_belongs_to_config_entry(item, entry)
             and (
                 item.unique_id == stable_unique_id
-                or item.unique_id.startswith(legacy_prefix)
+                or (
+                    legacy_current_unique_id
+                    and item.unique_id == legacy_current_unique_id
+                )
             )
         ]
 
@@ -161,6 +165,7 @@ def _migrate_legacy_registry_entries(
                         for item in entity_registry.entities.values()
                         if item.platform == DOMAIN
                         and item.domain == platform
+                        and _registry_entry_belongs_to_config_entry(item, entry)
                         and item.unique_id == stable_unique_id
                     ),
                     keeper,
@@ -224,3 +229,9 @@ def _migrate_legacy_registry_entries(
         if device.id == keep_device.id or device.id in referenced_device_ids:
             continue
         device_registry.async_remove_device(device.id)
+
+
+def _registry_entry_belongs_to_config_entry(item, entry: ConfigEntry) -> bool:
+    """Return whether a registry entity belongs to the config entry being migrated."""
+    config_entry_id = getattr(item, "config_entry_id", None)
+    return config_entry_id in (None, entry.entry_id)

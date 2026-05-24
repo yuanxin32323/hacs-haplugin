@@ -15,6 +15,7 @@ from .const import (
     CONF_ENTITY_TYPES,
     CONF_ENTITIES,
     CONF_DEVICE_UID,
+    CONF_MOBILE_MASKED,
     SUPPORTED_ENTITY_TYPES,
 )
 
@@ -36,6 +37,7 @@ class MqttSyncFlowMixin:
         self._web_url = None
         self._username = None
         self._password = None
+        self._mobile_masked = None
 
     async def _async_handle_entity_types_step(self, user_input, current_types=None):
         """处理实体类型选择步骤的共享逻辑。"""
@@ -244,15 +246,72 @@ class MqttSyncFlowMixin:
             "web_url": self._web_url,
             "username": self._username,
             "password": self._password,
+            CONF_MOBILE_MASKED: self._mobile_masked,
             CONF_ENTITY_TYPES: self._entity_types,
         }
 
     def _generate_title(self):
         """根据配置生成一个有意义的集成条目标题。"""
+        if self._mobile_masked:
+            return f"Haplugin-{self._mobile_masked}"
+        if self._username:
+            return f"Haplugin-{self._username}"
         if self._mqtt_url:
             return f"Haplugin-{self._mqtt_url}"
-        else:
-            return "Haplugin"
+        return "Haplugin"
+
+    def _decode_token_config(self, token: str) -> Dict[str, Any]:
+        """解析并校验网站生成的Token内容。"""
+        token = (token or "").strip()
+        if not token:
+            raise ValueError("empty token")
+
+        padding = "=" * (-len(token) % 4)
+        decoded_bytes = base64.b64decode(token + padding)
+        json_str = decoded_bytes.decode("utf-8")
+        config_data = json.loads(json_str)
+
+        if not isinstance(config_data, dict):
+            raise ValueError("token payload is not object")
+
+        required_keys = ("mqtt_url", "port", "web_url", "username", "password")
+        if any(not config_data.get(key) for key in required_keys):
+            raise ValueError("missing required token fields")
+
+        return config_data
+
+    def _set_connection_data_from_token(self, config_data: Dict[str, Any]) -> None:
+        """将Token中的连接信息写入当前流程状态。"""
+        self._mqtt_url = config_data.get("mqtt_url")
+        self._mqtt_port = config_data.get("port")
+        self._web_url = config_data.get("web_url")
+        self._username = config_data.get("username")
+        self._password = config_data.get("password")
+        self._mobile_masked = config_data.get(CONF_MOBILE_MASKED)
+
+    def _get_token_unique_key(self, username=None, web_url=None) -> str:
+        """返回用于区分Token配置项的唯一键。"""
+        username = username if username is not None else self._username
+        web_url = web_url if web_url is not None else self._web_url
+        return f"{str(web_url or '').rstrip('/')}|{username or ''}"
+
+    def _is_token_configured(
+        self,
+        username: str,
+        web_url: str,
+        ignore_entry_id: str | None = None,
+    ) -> bool:
+        """判断同一个Token身份是否已经存在配置项。"""
+        token_key = self._get_token_unique_key(username, web_url)
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if ignore_entry_id and entry.entry_id == ignore_entry_id:
+                continue
+            if self._get_token_unique_key(
+                entry.data.get("username"),
+                entry.data.get("web_url"),
+            ) == token_key:
+                return True
+        return False
 
 
 class MqttSyncFlowHandler(config_entries.ConfigFlow, MqttSyncFlowMixin, domain=DOMAIN):
@@ -272,12 +331,6 @@ class MqttSyncFlowHandler(config_entries.ConfigFlow, MqttSyncFlowMixin, domain=D
 
         直接跳转到MQTT URL配置步骤。
         """
-        # 检查是否已经存在配置项
-        existing_entries = self.hass.config_entries.async_entries(DOMAIN)
-        if existing_entries:
-            # 如果已经存在配置项，显示单配置提示
-            return self.async_abort(reason="single_config_only")
-
         return await self.async_step_mqtt_url(user_input)
 
     async def async_step_mqtt_url(self, user_input=None):
@@ -288,25 +341,21 @@ class MqttSyncFlowHandler(config_entries.ConfigFlow, MqttSyncFlowMixin, domain=D
             base64_str = user_input[CONF_MQTT_URL]
 
             try:
-                decoded_bytes = base64.b64decode(base64_str)
-                json_str = decoded_bytes.decode('utf-8')
-                config_data = json.loads(json_str)
+                config_data = self._decode_token_config(base64_str)
+                self._set_connection_data_from_token(config_data)
 
-                self._mqtt_url = config_data.get("mqtt_url")
-                self._mqtt_port = config_data.get("port")
-                self._web_url = config_data.get("web_url")
-                self._username = config_data.get("username")
-                self._password = config_data.get("password")
-
-                if not self._mqtt_url or not self._mqtt_port or not self._web_url or not self._username or not self._password:
-                    errors["mqtt_url"] = "invalid_mqtt_url"
-                    _LOGGER.error("缺少必要的MQTT连接参数: mqtt_url=%s, port=%s",
-                                  self._mqtt_url, self._mqtt_port)
+                if self._is_token_configured(self._username, self._web_url):
+                    errors["mqtt_url"] = "token_already_configured"
                 else:
+                    await self.async_set_unique_id(self._get_token_unique_key())
+
                     if _LOGGER.isEnabledFor(logging.INFO):
                         _LOGGER.info("成功解析MQTT连接信息: %s:%s", self._mqtt_url, self._mqtt_port)
 
                     return await self.async_step_entity_types()
+            except ValueError as e:
+                _LOGGER.error("Token校验失败: %s", str(e))
+                errors["mqtt_url"] = "invalid_mqtt_url"
             except Exception as e:
                 _LOGGER.error("解析Token失败: %s", str(e))
                 errors["mqtt_url"] = "invalid_user_token"
@@ -368,6 +417,7 @@ class MqttSyncOptionsFlowHandler(config_entries.OptionsFlow, MqttSyncFlowMixin):
         self._web_url = data.get("web_url")
         self._username = data.get("username")
         self._password = data.get("password")
+        self._mobile_masked = data.get(CONF_MOBILE_MASKED)
 
         # 生成当前token的base64编码，用于显示
         self._current_token = self._generate_token_base64()
@@ -388,6 +438,7 @@ class MqttSyncOptionsFlowHandler(config_entries.OptionsFlow, MqttSyncFlowMixin):
                 "web_url": self._web_url,
                 "username": self._username,
                 "password": self._password,
+                CONF_MOBILE_MASKED: self._mobile_masked,
             }
             json_str = json.dumps(token_data)
             return base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
@@ -436,27 +487,19 @@ class MqttSyncOptionsFlowHandler(config_entries.OptionsFlow, MqttSyncFlowMixin):
             base64_str = user_input.get(CONF_MQTT_URL)
 
             try:
-                decoded_bytes = base64.b64decode(base64_str)
-                json_str = decoded_bytes.decode('utf-8')
-                config_data = json.loads(json_str)
-
-                new_mqtt_url = config_data.get("mqtt_url")
-                new_mqtt_port = config_data.get("port")
-                new_web_url = config_data.get("web_url")
+                config_data = self._decode_token_config(base64_str)
                 new_username = config_data.get("username")
-                new_password = config_data.get("password")
+                new_web_url = config_data.get("web_url")
 
-                if not new_mqtt_url or not new_mqtt_port or not new_web_url or not new_username or not new_password:
-                    errors["mqtt_url"] = "invalid_mqtt_url"
-                    _LOGGER.error("缺少必要的MQTT连接参数: mqtt_url=%s, port=%s",
-                                  new_mqtt_url, new_mqtt_port)
+                if self._is_token_configured(
+                    new_username,
+                    new_web_url,
+                    ignore_entry_id=self._config_entry.entry_id,
+                ):
+                    errors["mqtt_url"] = "token_already_configured"
                 else:
                     # 更新连接信息
-                    self._mqtt_url = new_mqtt_url
-                    self._mqtt_port = new_mqtt_port
-                    self._web_url = new_web_url
-                    self._username = new_username
-                    self._password = new_password
+                    self._set_connection_data_from_token(config_data)
 
                     # 保存更新后的配置（保留原有的实体选择）
                     new_data = self._get_connection_data()
@@ -467,12 +510,17 @@ class MqttSyncOptionsFlowHandler(config_entries.OptionsFlow, MqttSyncFlowMixin):
                     )
 
                     self.hass.config_entries.async_update_entry(
-                        self._config_entry, data=new_data
+                        self._config_entry,
+                        title=self._generate_title(),
+                        data=new_data
                     )
 
                     _LOGGER.info("Token已更新: %s:%s", self._mqtt_url, self._mqtt_port)
                     return self.async_create_entry(title="", data={})
 
+            except ValueError as e:
+                _LOGGER.error("Token校验失败: %s", str(e))
+                errors["mqtt_url"] = "invalid_mqtt_url"
             except Exception as e:
                 _LOGGER.error("解析Token失败: %s", str(e))
                 errors["mqtt_url"] = "invalid_user_token"

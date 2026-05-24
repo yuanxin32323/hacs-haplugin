@@ -7,6 +7,7 @@ CONF_MQTT_URL = "mqtt_url"
 CONF_ENTITY_TYPES = "entity_types"
 CONF_ENTITIES = "entities"
 CONF_DEVICE_UID = "device_uid"
+CONF_MOBILE_MASKED = "mobile_masked"
 
 # MQTT配置
 MQTT_RECONNECT_INTERVAL = 5  # 断线后重连间隔，单位：秒

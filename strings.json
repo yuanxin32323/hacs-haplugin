@@ -17,9 +17,10 @@
       },
       "select_entities": {
         "title": "选择{type_name} {progress}",
-        "description": "选择要同步的设备，共 {count} 个设备可选",
+        "description": "共 {count} 个设备可选。开启全选会同步该类型全部设备；关闭后可通过搜索框按名称或 entity_id 精确选择。",
         "data": {
-          "entities": "设备列表"
+          "select_all": "同步该类型全部设备",
+          "entities": "单独选择设备"
         }
       }
     },
@@ -29,11 +30,12 @@
       "no_entity_types_selected": "请至少选择一种实体类型",
       "no_entities_selected": "请至少选择一个实体",
       "Value should be a list": "请至少选择一个选项",
+      "token_already_configured": "该Token已经添加，请输入其它Token或编辑现有配置项",
       "invalid_user_token": "无效的用户Token，请检查输入"
     },
     "abort": {
       "already_configured": "设备已经配置",
-      "single_config_only": "此集成只支持添加一个配置项，请编辑现有配置或删除后重试"
+      "single_config_only": "此集成已支持多个Token，请重新打开添加流程"
     }
   },
   "options": {
@@ -61,9 +63,10 @@
       },
       "select_entities": {
         "title": "选择{type_name} {progress}",
-        "description": "选择要同步的设备，共 {count} 个设备可选",
+        "description": "共 {count} 个设备可选。开启全选会同步该类型全部设备；关闭后可通过搜索框按名称或 entity_id 精确选择。",
         "data": {
-          "entities": "设备列表"
+          "select_all": "同步该类型全部设备",
+          "entities": "单独选择设备"
         }
       }
     },
@@ -71,6 +74,7 @@
       "no_entity_types_selected": "请至少选择一种实体类型",
       "no_entities_selected": "请至少选择一个实体",
       "Value should be a list": "请至少选择一个选项",
+      "token_already_configured": "该Token已经添加，请输入其它Token或编辑现有配置项",
       "invalid_mqtt_url": "无效的连接信息格式",
       "invalid_user_token": "无效的Token，请检查输入"
     }

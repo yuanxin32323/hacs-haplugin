@@ -627,11 +627,13 @@ class MqttSyncCoordinator(DataUpdateCoordinator):
         if self._unsub_state_listener:
             self._unsub_state_listener()
             self._unsub_state_listener = None
-        
+
         if self._unsub_stop_listener:
-            self._unsub_stop_listener()
+            unsub_stop_listener = self._unsub_stop_listener
             self._unsub_stop_listener = None
-        
+            if event is None:
+                unsub_stop_listener()
+
         # 停止消息处理
         self._processing = False
         if self._queue_processor_task:

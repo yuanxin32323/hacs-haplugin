@@ -21,9 +21,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-CONF_SELECT_ALL = "select_all"
-
-
 class MqttSyncFlowMixin:
     """MQTT同步配置流程的共享逻辑混合类。"""
 
@@ -74,25 +71,23 @@ class MqttSyncFlowMixin:
         type_name = self._get_type_display_name(current_type)
 
         if user_input is not None:
-            select_all = user_input.get(CONF_SELECT_ALL, False)
             selected = user_input.get(CONF_ENTITIES, []) or []
             if isinstance(selected, str):
                 selected = [selected]
 
-            if select_all:
-                selected = self._get_entity_ids_for_type(current_type)
-            else:
-                selected = [
-                    entity_id
-                    for entity_id in selected
-                    if entity_id.split(".")[0] == current_type
-                ]
+            selected = [
+                entity_id
+                for entity_id in selected
+                if entity_id.split(".")[0] == current_type
+            ]
+
+            selected = self._merge_hidden_existing_entities(current_type, selected)
 
             if not selected:
                 errors[CONF_ENTITIES] = "no_entities_selected"
             else:
                 # 保存当前类型的选择
-                self._selected_entities[current_type] = selected
+                self._selected_entities[current_type] = self._dedupe_entities(selected)
 
                 # 移动到下一个类型
                 self._current_type_index += 1
@@ -113,12 +108,8 @@ class MqttSyncFlowMixin:
         current_selected_for_type = [
             entity_id
             for entity_id in current_selected
-            if entity_id.split(".")[0] == current_type
+            if entity_id.split(".")[0] == current_type and entity_id in entity_ids
         ]
-        is_all_selected = (
-            entity_count > 0
-            and len(set(current_selected_for_type)) == len(set(entity_ids))
-        )
 
         # 计算进度信息
         progress = f"({self._current_type_index + 1}/{len(self._entity_types)})"
@@ -126,11 +117,9 @@ class MqttSyncFlowMixin:
         return self.async_show_form(
             step_id="select_entities",
             data_schema=vol.Schema({
-                vol.Optional(CONF_SELECT_ALL, default=is_all_selected):
-                    selector.BooleanSelector(),
-                vol.Optional(
+                vol.Required(
                     CONF_ENTITIES,
-                    default=[] if is_all_selected else current_selected_for_type,
+                    default=current_selected_for_type,
                 ):
                     selector.EntitySelector(
                         selector.EntitySelectorConfig(
@@ -146,6 +135,28 @@ class MqttSyncFlowMixin:
                 "count": str(entity_count),
             },
         )
+
+    def _dedupe_entities(self, entities: List[str]) -> List[str]:
+        """按原顺序去重实体ID。"""
+        seen = set()
+        deduped = []
+        for entity_id in entities:
+            if entity_id in seen:
+                continue
+            seen.add(entity_id)
+            deduped.append(entity_id)
+        return deduped
+
+    def _merge_hidden_existing_entities(self, entity_type: str, selected: List[str]) -> List[str]:
+        """保留编辑页没有展示出来的旧实体，避免保存时意外丢失。"""
+        current_entity_ids = set(self._get_entity_ids_for_type(entity_type))
+        hidden_existing = [
+            entity_id
+            for entity_id in self._selected_entities.get(entity_type, [])
+            if entity_id.split(".")[0] == entity_type
+            and entity_id not in current_entity_ids
+        ]
+        return self._dedupe_entities([*selected, *hidden_existing])
 
     async def _process_final_entities(self):
         """处理最终选择的实体列表，由子类实现具体逻辑。"""

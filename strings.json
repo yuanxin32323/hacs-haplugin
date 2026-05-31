@@ -17,10 +17,9 @@
       },
       "select_entities": {
         "title": "选择{type_name} {progress}",
-        "description": "共 {count} 个设备可选。开启全选会同步该类型全部设备；关闭后可通过搜索框按名称或 entity_id 精确选择。",
+        "description": "共 {count} 个设备可选。请通过搜索框按名称或 entity_id 选择需要同步到平台的设备。",
         "data": {
-          "select_all": "同步该类型全部设备",
-          "entities": "单独选择设备"
+          "entities": "选择设备"
         }
       }
     },
@@ -63,10 +62,9 @@
       },
       "select_entities": {
         "title": "选择{type_name} {progress}",
-        "description": "共 {count} 个设备可选。开启全选会同步该类型全部设备；关闭后可通过搜索框按名称或 entity_id 精确选择。",
+        "description": "共 {count} 个设备可选。请通过搜索框按名称或 entity_id 选择需要同步到平台的设备。",
         "data": {
-          "select_all": "同步该类型全部设备",
-          "entities": "单独选择设备"
+          "entities": "选择设备"
         }
       }
     },
